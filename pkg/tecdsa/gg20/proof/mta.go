@@ -318,6 +318,7 @@ func (rp ResponseProof) FinalizeWc(vp *ResponseVerifyParams) (*big.Int, error) {
 // [spec] fig 10: MtaProveRange1
 func (pp Proof1Params) Prove() (*Range1Proof, error) {
 	if err := core.In(pp.A, pp.Curve.Params().N); err != nil {
+		//保证 0<= A < N
 		return nil, err
 	}
 	if err := core.In(pp.R, pp.Pk.N); err != nil {

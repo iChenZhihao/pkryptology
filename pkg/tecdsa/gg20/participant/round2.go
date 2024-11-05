@@ -41,6 +41,7 @@ func (p2ps *P2PSend) UnmarshalJSON(bytes []byte) error {
 // SignRound2 performs round 2 signing operations for a single signer
 // Trusted Dealer Mode: see [spec] fig 7: SignRound2
 // DKG Mode: see [spec] fig 8: SignRound2
+// params：其他几个节点向signer广播的信息，p2p：其他几个节点向signer广播的Prove证明
 func (signer *Signer) SignRound2(params map[uint32]*Round1Bcast, p2p map[uint32]*Round1P2PSend) (map[uint32]*P2PSend, error) {
 	if err := signer.verifyStateMap(2, params); err != nil {
 		return nil, err

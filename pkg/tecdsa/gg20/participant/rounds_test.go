@@ -144,10 +144,10 @@ func setupSignersMap(t *testing.T, curve elliptic.Curve, playerThreshold, player
 		primesCnt *= 2
 	}
 
-	primesArray := genPrimesArray(primesCnt)
+	primesArray := genPrimesArray(primesCnt) // 生成一个结构体数组，primesArray[i]为节点i的paillier p,q两个等长大素数
 	distributedProofParams := make(map[uint32]*dealer.ProofParams, playerCnt)
 	for i := range sharesMap {
-		playerKeysMap[i], err = paillier.NewSecretKey(primesArray[i-1].p, primesArray[i-1].q)
+		playerKeysMap[i], err = paillier.NewSecretKey(primesArray[i-1].p, primesArray[i-1].q) // 生成节点i的paillier密钥
 		require.NoError(t, err)
 		pubkeys[i] = &playerKeysMap[i].PublicKey
 		if useDistributed {
@@ -646,10 +646,12 @@ func TestSignerSignRound6WorksP256(t *testing.T) {
 }
 
 func fullroundstest3Signers(t *testing.T, curve elliptic.Curve, msg []byte, verify curves.EcdsaVerify) {
+	// 全流程测试
 	var err error
 	playerCnt := 5
 	playerMin := 3
 	for _, useDistributed := range []bool{false, true} {
+		// 跑两轮，第一轮使用中心化密钥生成，第二轮为分布式密钥生成
 		pk, signers := setupSignersMap(t, curve, playerMin, playerCnt, false, verify, useDistributed)
 
 		sk := signers[1].share.Value.Add(signers[2].share.Value).Add(signers[3].share.Value)
@@ -664,20 +666,21 @@ func fullroundstest3Signers(t *testing.T, curve elliptic.Curve, msg []byte, veri
 		signerOut := make(map[uint32]*Round1Bcast, playerCnt)
 		r1P2P := make(map[uint32]map[uint32]*Round1P2PSend, playerCnt)
 		for i, s := range signers {
-			signerOut[i], r1P2P[i], err = s.SignRound1()
+			signerOut[i], r1P2P[i], err = s.SignRound1() // r1P2P[i] 为 节点i要发给其他节点的证明的列表
 			require.NoError(t, err)
 		}
-		// Sign Round 2
 
+		// Sign Round 2
 		err = signers[1].setCosigners([]uint32{2, 3})
 		require.NoError(t, err)
 		p2p := make(map[uint32]map[uint32]*P2PSend)
 		var r1P2pIn map[uint32]*Round1P2PSend
 		if useDistributed {
 			r1P2pIn = make(map[uint32]*Round1P2PSend, 3)
-			r1P2pIn[2] = r1P2P[2][1]
-			r1P2pIn[3] = r1P2P[3][1]
+			r1P2pIn[2] = r1P2P[2][1] //节点2要发给节点1的证明，赋值给r1P2pIn[2]
+			r1P2pIn[3] = r1P2P[3][1] //节点3要发给节点1的证明，赋值给r1P2pIn[3]
 		}
+		// 1号节点拿签名第一轮的其他几个节点的结果，以及其他几个节点的Prove证明，进行签名第二轮
 		p2p[1], err = signers[1].SignRound2(map[uint32]*Round1Bcast{
 			2: signerOut[2],
 			3: signerOut[3],
@@ -815,6 +818,15 @@ func fullroundstest3Signers(t *testing.T, curve elliptic.Curve, msg []byte, veri
 			2: round6FullBcast[1],
 		})
 		require.NoError(t, err)
+		sig := big.NewInt(0)
+		sig.Add(sig, sigs[0].S)
+		sig.Add(sig, sigs[1].S)
+		sig.Add(sig, sigs[2].S)
+		r := big.NewInt(0)
+		r.Add(r, sigs[0].R)
+		r.Add(r, sigs[1].R)
+		r.Add(r, sigs[2].R)
+
 	}
 }
 
