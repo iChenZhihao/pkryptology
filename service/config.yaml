@@ -10,3 +10,6 @@ zookeeper:
   servers:
     - "49.234.153.15:2181"
   sessionTimeout: 10000  #ms
+
+gg20:
+  stableTimeWindow: 5000  #ms

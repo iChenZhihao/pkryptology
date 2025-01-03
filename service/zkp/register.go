@@ -10,18 +10,21 @@ import (
 
 const ServerRegisterPath = "/gg20/nodes"
 
-func Register() {
+func (m *ZkManager) Register() error {
 	ip, err := GetLocalIP()
 	if err != nil {
 		glog.Error(err.Error())
+		return err
 	}
 	address := fmt.Sprintf("%s:%s", ip, global.Config.Server.Port)
-	err = registerService(global.GetZkManager().GetConn(), ServerRegisterPath, address)
+	err = registerService(m.GetConn(), ServerRegisterPath, address)
 	if err != nil {
-		glog.Error("Sign Node Register To Zookeeper Error: ", err.Error())
+		glog.Error("签名节点注册到Zk中失败：", err.Error())
+		return err
 	} else {
-		glog.Info(address, " Register To Zk Success! ")
+		glog.Info(address, " 成功注册到Zk！ ")
 	}
+	return nil
 }
 
 // 注册服务到 Zookeeper
@@ -57,5 +60,5 @@ func GetLocalIP() (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("no suitable IP address found")
+	return "", fmt.Errorf("未找到合适的IP地址")
 }
