@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/coinbase/kryptology/service/initial"
+	"log"
 )
 
 func main() {
@@ -10,7 +11,9 @@ func main() {
 	if err != nil {
 		return
 	} // 将日志输出到控制台
-	flag.Parse()
+	//flag.Parse()
 
-	initial.Run()
+	if err := initial.Execute(); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
 }

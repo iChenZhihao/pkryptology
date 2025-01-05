@@ -17,6 +17,8 @@ func (m *ZkManager) Register() error {
 		return err
 	}
 	address := fmt.Sprintf("%s:%s", ip, global.Config.Server.Port)
+	m.nodeAddress = address
+
 	err = registerService(m.GetConn(), ServerRegisterPath, address)
 	if err != nil {
 		glog.Error("签名节点注册到Zk中失败：", err.Error())

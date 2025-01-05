@@ -7,7 +7,7 @@ import (
 
 func Run() {
 	// 加载配置信息
-	LoadConfig()
+	//LoadConfig()
 
 	// 初始化Zk连接
 	InitZookeeper()

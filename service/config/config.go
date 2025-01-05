@@ -27,6 +27,7 @@ type Zookeeper struct {
 }
 
 type GG20 struct {
+	Secret string `json:"secret" mapstructure:"secret"`
 	// 稳定窗口时间 单位: 毫秒
 	StableTimeWindow time.Duration `mapstructure:"stableTimeWindow" json:"stableTimeWindow"`
 }

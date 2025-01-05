@@ -23,6 +23,7 @@ type ZkManager struct {
 	conn          *zk.Conn
 	mu            sync.Mutex
 	lastNodeCount int
+	nodeAddress   string
 }
 
 func (m *ZkManager) Init(servers []string, sessionTimeout time.Duration) error {

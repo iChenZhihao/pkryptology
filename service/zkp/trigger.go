@@ -1,6 +1,8 @@
 package zkp
 
 import (
+	"fmt"
+	"github.com/coinbase/kryptology/service/gg20/dkg"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
@@ -22,8 +24,53 @@ func TriggerDKG(nodeCount int) error {
 		return nodeCountDontMatch
 	}
 
-	for index, nodeAddress := range children {
-		glog.Infof("节点:%d号，地址:%s\n", index, nodeAddress)
+	//for index, nodeAddress := range children {
+	//	glog.Infof("节点:%d号，地址:%s\n", index, nodeAddress)
+	//}
+	operator := dkg.GetDkgOperator()
+	operator.UpdateClusterInfo(GetZkManager().nodeAddress, children) // 更新集群信息，并设置其状态为不可用
+
+	zkLock := NewZkLock(GetZkManager().GetConn(), DkgLockPath)
+
+	isLeader, err := zkLock.AcquireNotWatch()
+
+	defer func() {
+		if err := zkLock.Release(); err != nil {
+			glog.Error("释放锁失败: ", err)
+		}
+	}()
+
+	if err != nil {
+		glog.Info("获取分布式锁失败: ", err)
+		return err
+	} else if !isLeader {
+		glog.Info("未获取到分布式锁：", zkLock.ownNodePath)
+	} else if isLeader {
+		executeDKG(GetZkManager().nodeAddress, children)
 	}
+
+	//if err := zkLock.Acquire(); err != nil {
+	//	glog.Info("获取分布式锁失败: ", err)
+	//	return nil
+	//}
+	//defer func() {
+	//	if err := zkLock.Release(); err != nil {
+	//		glog.Error("释放锁失败: ", err)
+	//	}
+	//}()
+
+	// 执行DKG逻辑
+	//executeDKG()
 	return nil
+}
+
+func executeDKG(myaddress string, nodes []string) {
+	glog.Info("Executing DKG...")
+	fmt.Println(myaddress)
+	err := dkg.GetDkgOperator().StartDkg()
+	if err != nil {
+		glog.Errorf("执行Dkg失败：%v", err.Error())
+		return
+	}
+	glog.Info("DKG completed.")
 }
