@@ -39,6 +39,7 @@ func (dp *Participant) Round1(secret []byte) (Round1Bcast, Round1P2PSend, error)
 	}
 
 	if secret == nil {
+		// 为空，则随机生成一个
 		// 1. x $← Zq∗
 		s, err := dp.scalar.Random()
 		if err != nil {
@@ -46,11 +47,13 @@ func (dp *Participant) Round1(secret []byte) (Round1Bcast, Round1P2PSend, error)
 		}
 		secret = s.Bytes()
 	} else {
+		// 自定义，则将传入的secret转为bigInt
 		s := new(big.Int).SetBytes(secret)
 		if !dp.scalar.IsValid(s) {
 			return nil, nil, fmt.Errorf("invalid secret value")
 		}
 		if s.Cmp(core.Zero) == 0 {
+			// 不能为0
 			return nil, nil, internal.ErrZeroValue
 		}
 	}
