@@ -33,6 +33,10 @@ func GetDkgRound2BcastUrl(nodeAddr string) string {
 	return fmt.Sprintf("http://%s/dkg/round2/recv", nodeAddr)
 }
 
+func GetDkgRound3BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("http://%s/dkg/round3/recv", nodeAddr)
+}
+
 func Base64DecodeSecret(secretStr string) []byte {
 	if len(secretStr) == 0 {
 		return nil

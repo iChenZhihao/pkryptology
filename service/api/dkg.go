@@ -27,9 +27,9 @@ func GetDkgController() *DkgController {
 
 func (d *DkgController) DoRound1(c *gin.Context) {
 	//glog.Info("DkgRound1触发接口被调用了")
-	value := c.Query("secret")
-	secret := dkg.Base64DecodeSecret(value)
-	d.operator.TriggeredToStartRound1(secret)
+	//value := c.Query("secret")
+	//secret := dkg.Base64DecodeSecret(value)
+	d.operator.TriggeredToStartRound1()
 	//if err != nil {
 	//	glog.Errorf("被调用启动Round1失败：%v\n", err.Error())
 	//	response.Failed("", c)
@@ -69,5 +69,22 @@ func (d *DkgController) DoRound2Recv(c *gin.Context) {
 		return
 	}
 	d.operator.RecvDkgRound2(*recvBody)
+	response.Success("", nil, c)
+}
+
+func (d *DkgController) DoRound3Recv(c *gin.Context) {
+	//glog.Info("DkgRound2Recv接收接口被调用了")
+	data, err := c.GetRawData()
+	if err != nil {
+		response.Failed("获取DkgRound3请求体失败", c)
+		return
+	}
+	recvBody := &dkg.DkgRound3Recv{}
+	err = json.Unmarshal(data, recvBody)
+	if err != nil {
+		response.Failed("反序列化DkgRound3失败", c)
+		return
+	}
+	d.operator.RecvDkgRound3(*recvBody)
 	response.Success("", nil, c)
 }

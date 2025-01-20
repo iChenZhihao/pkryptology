@@ -301,6 +301,22 @@ type DkgParticipant struct {
 	Round uint
 }
 
+func NewDkgParticipant(curve elliptic.Curve, id uint32, threshold, total uint32) *DkgParticipant {
+	return &DkgParticipant{
+		Curve: curve,
+		id:    id,
+		Round: 1,
+		state: &dkgstate{
+			Threshold: threshold,
+			Limit:     total,
+		},
+	}
+}
+
+func (dp *DkgParticipant) GetShamirShamirX() []*v1.ShamirShare {
+	return dp.state.X
+}
+
 type dkgParticipantData struct {
 	PublicKey   *paillier.PublicKey
 	ProofParams *dealer.ProofParams

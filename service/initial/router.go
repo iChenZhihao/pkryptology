@@ -25,6 +25,7 @@ func Router() {
 		dkgGroup.GET("/round1", api.GetDkgController().DoRound1)
 		dkgGroup.POST("/round1/recv", api.GetDkgController().DoRound1Recv)
 		dkgGroup.POST("/round2/recv", api.GetDkgController().DoRound2Recv)
+		dkgGroup.POST("/round3/recv", api.GetDkgController().DoRound3Recv)
 	}
 
 	_ = engine.Run(fmt.Sprintf(":%s", global.Config.Server.Port))
