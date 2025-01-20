@@ -8,8 +8,10 @@ package participant
 
 import (
 	"crypto/elliptic"
+	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/stretchr/testify/require"
@@ -896,7 +898,10 @@ func TestDkgRound4WrongProofs(t *testing.T) {
 	require.Nil(t, out2)
 }
 
+// 全流程DKG工作过程
 func TestDkgFullRoundsWorks(t *testing.T) {
+	now := time.Now()
+	fmt.Printf("start time: %v\n", now)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -904,6 +909,8 @@ func TestDkgFullRoundsWorks(t *testing.T) {
 	total := 3
 	threshold := 2
 	var err error
+	now = time.Now()
+	fmt.Printf("before initiate time: %v\n", now)
 
 	// Initiate 3 parties for DKG
 	dkgParticipants := make(map[uint32]*DkgParticipant, total)
@@ -919,12 +926,18 @@ func TestDkgFullRoundsWorks(t *testing.T) {
 		}
 	}
 
+	now = time.Now()
+	fmt.Printf("before dkg round1 time: %v\n", now)
+
 	// Run Dkg Round 1
 	dkgR1Out := make(map[uint32]*DkgRound1Bcast, total)
 	for i := 1; i <= total; i++ {
 		dkgR1Out[uint32(i)], err = dkgParticipants[uint32(i)].DkgRound1(uint32(threshold), uint32(total))
 		require.NoError(t, err)
 	}
+
+	now = time.Now()
+	fmt.Printf("before dkg round2 time: %v\n", now)
 
 	// Run Dkg Round 2
 	dkgR2Bcast := make(map[uint32]*DkgRound2Bcast, total)
@@ -933,6 +946,8 @@ func TestDkgFullRoundsWorks(t *testing.T) {
 		dkgR2Bcast[uint32(i)], dkgR2P2PSend[uint32(i)], err = dkgParticipants[uint32(i)].DkgRound2(dkgR1Out)
 		require.NoError(t, err)
 	}
+	now = time.Now()
+	fmt.Printf("before dkg round3 time: %v\n", now)
 
 	// Run Dkg Round 3
 	decommitments := make(map[uint32]*core.Witness, total)
@@ -962,12 +977,18 @@ func TestDkgFullRoundsWorks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	now = time.Now()
+	fmt.Printf("before dkg round4 time: %v\n", now)
+
 	// Run Dkg Round 4
 	dkgR4Out := make(map[uint32]*DkgResult, total)
 	for i := 1; i <= total; i++ {
 		dkgR4Out[uint32(i)], err = dkgParticipants[uint32(i)].DkgRound4(dkgR3Out)
 		require.NoError(t, err)
 	}
+
+	now = time.Now()
+	fmt.Printf("finish dkg rounds time: %v\n", now)
 
 	// Check that the shares result in valid secret key and public key
 	field := curves.NewField(curve.Params().N)

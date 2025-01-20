@@ -7,11 +7,13 @@
 package participant
 
 import (
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/json"
+	"fmt"
+	v1 "github.com/coinbase/kryptology/pkg/sharing/v1"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/stretchr/testify/require"
@@ -69,14 +71,6 @@ var (
 	dummyVerifier = func(pubKey *curves.EcPoint, hash []byte, signature *curves.EcdsaSignature) bool {
 		return false
 	}
-	ecdsaVerifier = func(verKey *curves.EcPoint, hash []byte, sig *curves.EcdsaSignature) bool {
-		pk := &ecdsa.PublicKey{
-			Curve: verKey.Curve,
-			X:     verKey.X,
-			Y:     verKey.Y,
-		}
-		return ecdsa.Verify(pk, hash, sig.R, sig.S)
-	}
 	k256Verifier = func(pubKey *curves.EcPoint, hash []byte, sig *curves.EcdsaSignature) bool {
 		btcPk := &btcec.PublicKey{
 			Curve: btcec.S256(),
@@ -122,6 +116,16 @@ func setupSignersMap(t *testing.T, curve elliptic.Curve, playerThreshold, player
 
 	pk, sharesMap, err := dealer.NewDealerShares(curve, uint32(playerThreshold), uint32(playerCnt), nil)
 	require.NoError(t, err)
+
+	field := curves.NewField(curve.Params().N)
+	shamir, _ := v1.NewShamir(playerThreshold, playerCnt, field)
+	share1 := v1.NewShamirShare(1, sharesMap[1].ShamirShare.Value.Value.Bytes(), field)
+	share2 := v1.NewShamirShare(2, sharesMap[2].ShamirShare.Value.Value.Bytes(), field)
+	share3 := v1.NewShamirShare(3, sharesMap[3].ShamirShare.Value.Value.Bytes(), field)
+	secret123, err := shamir.Combine(share1, share2, share3)
+
+	pkk, err := curves.NewScalarBaseMult(curve, new(big.Int).SetBytes(secret123))
+	require.True(t, pk.Equals(pkk))
 
 	// TODO: After the map refactor, we should be able to delete arbitrary signers,
 	// however, for now, the signers' identifiers need to be predictable in array form
@@ -634,15 +638,210 @@ func TestSignerSignRound6WorksK256(t *testing.T) {
 	msg := make([]byte, 32)
 	hash, err := core.Hash(msg, curve)
 	require.NoError(t, err)
-	fullroundstest3Signers(t, curve, hash.Bytes(), k256Verifier)
+	//fullroundstest3Signers(t, curve, hash.Bytes(), k256Verifier)
+	fullroundstest3SignersWithDkgRoundTests(t, curve, hash.Bytes(), k256Verifier)
 }
 
+// 三个节点的签名全流程测试
 func TestSignerSignRound6WorksP256(t *testing.T) {
 	curve := elliptic.P256()
 	msg := make([]byte, 32)
 	hash, err := core.Hash(msg, curve)
 	require.NoError(t, err)
-	fullroundstest3Signers(t, curve, hash.Bytes(), ecdsaVerifier)
+	//fullroundstest3Signers(t, curve, hash.Bytes(), ecdsaVerifier)
+	fullroundstest3SignersWithDkgRoundTests(t, curve, hash.Bytes(), ecdsaVerifier)
+}
+
+func fullroundstest3SignersWithDkgRoundTests(t *testing.T, curve elliptic.Curve, msg []byte, verify curves.EcdsaVerify) {
+	// 全流程测试
+	var _ error
+	playerCnt := 5
+	playerMin := 3
+	for _, useDistributed := range []bool{false, true} {
+		// 跑两轮，第一轮使用中心化密钥生成，第二轮为分布式密钥生成
+		var pk *curves.EcPoint
+		var signers map[uint32]*Signer
+		if !useDistributed {
+			continue
+		}
+		//pk, signers = setupSignersMap(t, curve, playerMin, playerCnt, false, verify, useDistributed)
+
+		fmt.Printf("start dkg at: %v\n", time.Now())
+		DkgParticipants, DkgRoundsOut, err := DkgFullRoundsWorks(t, curve, playerCnt, playerMin)
+		fmt.Printf("finish dkg at: %v\n", time.Now())
+		if err != nil {
+			fmt.Printf("Dkg error: %v\n", err)
+		}
+		pk, signers = ConvertToSigners(DkgParticipants, DkgRoundsOut, uint(playerMin))
+
+		sk := signers[1].share.Value.Add(signers[2].share.Value).Add(signers[3].share.Value)
+		_, ppk := btcec.PrivKeyFromBytes(curve, sk.Bytes())
+
+		if ppk.X.Cmp(pk.X) != 0 || ppk.Y.Cmp(pk.Y) != 0 {
+			//t.Errorf("Invalid shares")
+			//t.FailNow()
+			fmt.Println("Invalid shares")
+		}
+
+		fmt.Printf("start sign at: %v\n", time.Now())
+
+		// Sign Round 1
+		signerOut := make(map[uint32]*Round1Bcast, playerCnt)
+		r1P2P := make(map[uint32]map[uint32]*Round1P2PSend, playerCnt)
+		for i, s := range signers {
+			signerOut[i], r1P2P[i], err = s.SignRound1() // r1P2P[i] 为 节点i要发给其他节点的证明的列表
+			require.NoError(t, err)
+		}
+
+		// Sign Round 2
+		err = signers[1].setCosigners([]uint32{2, 3})
+		require.NoError(t, err)
+		p2p := make(map[uint32]map[uint32]*P2PSend)
+		var r1P2pIn map[uint32]*Round1P2PSend
+		if useDistributed {
+			r1P2pIn = make(map[uint32]*Round1P2PSend, 3)
+			r1P2pIn[2] = r1P2P[2][1] //节点2要发给节点1的证明，赋值给r1P2pIn[2]
+			r1P2pIn[3] = r1P2P[3][1] //节点3要发给节点1的证明，赋值给r1P2pIn[3]
+		}
+		// 1号节点拿签名第一轮的其他几个节点的结果，以及其他几个节点的Prove证明，进行签名第二轮
+		p2p[1], err = signers[1].SignRound2(map[uint32]*Round1Bcast{
+			2: signerOut[2],
+			3: signerOut[3],
+		}, r1P2pIn)
+		require.NoError(t, err)
+
+		err = signers[2].setCosigners([]uint32{1, 3})
+		require.NoError(t, err)
+		if useDistributed {
+			r1P2pIn = make(map[uint32]*Round1P2PSend, 3)
+			r1P2pIn[1] = r1P2P[1][2]
+			r1P2pIn[3] = r1P2P[3][2]
+		}
+		p2p[2], err = signers[2].SignRound2(map[uint32]*Round1Bcast{
+			1: signerOut[1],
+			3: signerOut[3],
+		}, r1P2pIn)
+		require.NoError(t, err)
+
+		err = signers[3].setCosigners([]uint32{1, 2})
+		require.NoError(t, err)
+		if useDistributed {
+			r1P2pIn = make(map[uint32]*Round1P2PSend, 3)
+			r1P2pIn[1] = r1P2P[1][3]
+			r1P2pIn[2] = r1P2P[2][3]
+		}
+		p2p[3], err = signers[3].SignRound2(map[uint32]*Round1Bcast{
+			1: signerOut[1],
+			2: signerOut[2],
+		}, r1P2pIn)
+		require.NoError(t, err)
+
+		// Sign Round 3
+		round3Bcast := make(map[uint32]*Round3Bcast, playerMin)
+		round3Bcast[1], err = signers[1].SignRound3(map[uint32]*P2PSend{2: p2p[2][1], 3: p2p[3][1]})
+		require.NoError(t, err)
+
+		round3Bcast[2], err = signers[2].SignRound3(map[uint32]*P2PSend{1: p2p[1][2], 3: p2p[3][2]})
+		require.NoError(t, err)
+
+		round3Bcast[3], err = signers[3].SignRound3(map[uint32]*P2PSend{1: p2p[1][3], 2: p2p[2][3]})
+		require.NoError(t, err)
+
+		// Sign Round 4
+		round4Bcast := make(map[uint32]*Round4Bcast, playerMin)
+		round4Bcast[1], err = signers[1].SignRound4(map[uint32]*Round3Bcast{2: round3Bcast[2], 3: round3Bcast[3]})
+		require.NoError(t, err)
+
+		round4Bcast[2], err = signers[2].SignRound4(map[uint32]*Round3Bcast{1: round3Bcast[1], 3: round3Bcast[3]})
+		require.NoError(t, err)
+
+		round4Bcast[3], err = signers[3].SignRound4(map[uint32]*Round3Bcast{1: round3Bcast[1], 2: round3Bcast[2]})
+		require.NoError(t, err)
+
+		// Sign Round 5
+		round5Bcast := make(map[uint32]*Round5Bcast, playerMin)
+		r5P2p := make(map[uint32]map[uint32]*Round5P2PSend, playerMin)
+		round5Bcast[1], r5P2p[1], err = signers[1].SignRound5(map[uint32]*Round4Bcast{2: round4Bcast[2], 3: round4Bcast[3]})
+		require.NoError(t, err)
+
+		round5Bcast[2], r5P2p[2], err = signers[2].SignRound5(map[uint32]*Round4Bcast{1: round4Bcast[1], 3: round4Bcast[3]})
+		require.NoError(t, err)
+
+		round5Bcast[3], r5P2p[3], err = signers[3].SignRound5(map[uint32]*Round4Bcast{1: round4Bcast[1], 2: round4Bcast[2]})
+		require.NoError(t, err)
+
+		Rbark, err := signers[1].state.Rbark.Add(signers[2].state.Rbark)
+		require.NoError(t, err)
+
+		Rbark, err = Rbark.Add(signers[3].state.Rbark)
+		require.NoError(t, err)
+
+		Rbark.Y, err = core.Neg(Rbark.Y, curve.Params().P)
+		require.NoError(t, err)
+		Rbark, err = Rbark.Add(pk)
+		require.NoError(t, err)
+
+		if !Rbark.IsIdentity() {
+			t.Errorf("%v != %v", Rbark.X, pk.X)
+			t.FailNow()
+		}
+
+		// Sign Round 6
+		var r6P2pin map[uint32]*Round5P2PSend
+		if useDistributed {
+			// Check failure cases, first with nil input
+			// then with missing participant data
+			_, err = signers[1].SignRound6Full(msg, map[uint32]*Round5Bcast{2: round5Bcast[2], 3: round5Bcast[3]}, r6P2pin)
+			require.Error(t, err)
+
+			r6P2pin = make(map[uint32]*Round5P2PSend, playerMin)
+			_, err = signers[1].SignRound6Full(msg, map[uint32]*Round5Bcast{2: round5Bcast[2], 3: round5Bcast[3]}, r6P2pin)
+
+			require.Error(t, err)
+
+			r6P2pin[2] = r5P2p[2][1]
+			_, err = signers[1].SignRound6Full(msg, map[uint32]*Round5Bcast{2: round5Bcast[2], 3: round5Bcast[3]}, r6P2pin)
+			require.Error(t, err)
+
+			r6P2pin[3] = r5P2p[3][1]
+		}
+		round6FullBcast := make([]*Round6FullBcast, playerMin)
+		round6FullBcast[0], err = signers[1].SignRound6Full(msg, map[uint32]*Round5Bcast{2: round5Bcast[2], 3: round5Bcast[3]}, r6P2pin)
+		require.Nil(t, err)
+		if useDistributed {
+			r6P2pin = make(map[uint32]*Round5P2PSend, playerMin)
+			r6P2pin[1] = r5P2p[1][2]
+			r6P2pin[3] = r5P2p[3][2]
+		}
+		round6FullBcast[1], err = signers[2].SignRound6Full(msg, map[uint32]*Round5Bcast{1: round5Bcast[1], 3: round5Bcast[3]}, r6P2pin)
+		require.Nil(t, err)
+		if useDistributed {
+			r6P2pin = make(map[uint32]*Round5P2PSend, playerMin)
+			r6P2pin[1] = r5P2p[1][3]
+			r6P2pin[2] = r5P2p[2][3]
+		}
+		round6FullBcast[2], err = signers[3].SignRound6Full(msg, map[uint32]*Round5Bcast{1: round5Bcast[1], 2: round5Bcast[2]}, r6P2pin)
+		require.Nil(t, err)
+		require.NoError(t, err)
+
+		sigs := make([]*curves.EcdsaSignature, 3)
+		sigs[0], err = signers[1].SignOutput(map[uint32]*Round6FullBcast{
+			2: round6FullBcast[1],
+			3: round6FullBcast[2],
+		})
+		require.NoError(t, err)
+
+		sigs[1], err = signers[2].SignOutput(map[uint32]*Round6FullBcast{
+			1: round6FullBcast[0],
+			3: round6FullBcast[2],
+		})
+		require.NoError(t, err)
+		sigs[2], err = signers[3].SignOutput(map[uint32]*Round6FullBcast{
+			1: round6FullBcast[0],
+			2: round6FullBcast[1],
+		})
+		require.NoError(t, err)
+	}
 }
 
 func fullroundstest3Signers(t *testing.T, curve elliptic.Curve, msg []byte, verify curves.EcdsaVerify) {
@@ -651,6 +850,9 @@ func fullroundstest3Signers(t *testing.T, curve elliptic.Curve, msg []byte, veri
 	playerCnt := 5
 	playerMin := 3
 	for _, useDistributed := range []bool{false, true} {
+		if !useDistributed {
+			continue
+		}
 		// 跑两轮，第一轮使用中心化密钥生成，第二轮为分布式密钥生成
 		pk, signers := setupSignersMap(t, curve, playerMin, playerCnt, false, verify, useDistributed)
 

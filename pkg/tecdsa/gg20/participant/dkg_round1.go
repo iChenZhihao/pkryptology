@@ -9,6 +9,7 @@ package participant
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/coinbase/kryptology/internal"
 	"github.com/coinbase/kryptology/pkg/core"
@@ -81,6 +82,8 @@ func (dp *DkgParticipant) DkgRound1(threshold, total uint32) (*DkgRound1Bcast, e
 	values := make(chan *big.Int, 2)
 	errors := make(chan error, 2)
 
+	now := time.Now()
+	fmt.Printf("GenerateSafePrime start: %v\n", now)
 	var Pi, Qi *big.Int
 	for Pi == Qi {
 		for range []int{1, 2} {
@@ -99,6 +102,8 @@ func (dp *DkgParticipant) DkgRound1(threshold, total uint32) (*DkgRound1Bcast, e
 
 		Pi, Qi = <-values, <-values
 	}
+	now = time.Now()
+	fmt.Printf("GenerateSafePrime end: %v\n", now)
 
 	// Step 7: Compute tildeNi = Pi*Qi
 	tildeNi := new(big.Int).Mul(Pi, Qi)
