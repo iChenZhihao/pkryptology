@@ -1,4 +1,4 @@
-package dkg
+package node
 
 import (
 	"crypto/ecdsa"
@@ -8,8 +8,8 @@ import (
 	"github.com/coinbase/kryptology/pkg/core/curves"
 	"github.com/coinbase/kryptology/pkg/paillier"
 	v1 "github.com/coinbase/kryptology/pkg/sharing/v1"
-	part "github.com/coinbase/kryptology/pkg/tecdsa/gg20/participant"
-	//"github.com/coinbase/kryptology/service/global"
+	"github.com/coinbase/kryptology/pkg/tecdsa/gg20/dealer"
+	ptcpt "github.com/coinbase/kryptology/pkg/tecdsa/gg20/participant"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"math/big"
@@ -20,8 +20,7 @@ import (
 const DkgSecretKey = "secret"
 
 var (
-	mu           sync.Mutex
-	Operator     *DkgOperator
+	operator     *DkgOperator
 	once         sync.Once
 	generator, _ = curves.NewScalarBaseMult(btcec.S256(), big.NewInt(4765))
 
@@ -39,8 +38,9 @@ var (
 type DkgOperator struct {
 	nodeAddress       string
 	participantAddrs  []string
-	participant       *part.DkgParticipant
-	dkgResult         *part.DkgResult
+	participant       *ptcpt.DkgParticipant
+	dkgResult         *ptcpt.DkgResult
+	publicShareMap    map[uint32]*dealer.PublicShare
 	id                uint32
 	threshold         uint32
 	total             uint32
@@ -53,29 +53,27 @@ type DkgOperator struct {
 }
 
 type DkgRound1Recv struct {
-	Id uint32 `json:"id"`
-	//Bcastj kdkg.Round1Bcast   `json:"bcastj"`
-	//P2pj   kdkg.Round1P2PSend `json:"p2pj"`
-	Round1Bcast *part.DkgRound1Bcast `json:"round1Bcast"`
+	Id          uint32                `json:"id"`
+	Round1Bcast *ptcpt.DkgRound1Bcast `json:"round1Bcast"`
 }
 
 type DkgRound2Recv struct {
-	Id uint32 `json:"id"`
-	//Round2Outj kdkg.Round2Bcast `json:"round2Outj"`
+	Id           uint32          `json:"id"`
 	Decommitment *core.Witness   `json:"decommitment"`
 	ShamirShare  *v1.ShamirShare `json:"shamirShare"`
 }
 
 type DkgRound3Recv struct {
-	Id       uint32            `json:"id"`
-	PsfProof paillier.PsfProof `json:"psfProof"`
+	Id          uint32              `json:"id"`
+	PsfProof    paillier.PsfProof   `json:"psfProof"`
+	PublicShare *dealer.PublicShare `json:"publicShare"`
 }
 
 func GetDkgOperator() *DkgOperator {
 	once.Do(func() {
-		Operator = &DkgOperator{}
+		operator = &DkgOperator{}
 	})
-	return Operator
+	return operator
 }
 
 // UpdateClusterInfo 更新签名节点集群信息
@@ -101,6 +99,8 @@ func (d *DkgOperator) UpdateClusterInfo(nodeAddress string, participants []strin
 		close(d.ChanRecvRound3)
 	}
 	d.ChanRecvRound3 = make(chan DkgRound3Recv, len(participants)*2)
+
+	d.publicShareMap = make(map[uint32]*dealer.PublicShare, d.total)
 
 	currentId := -1
 	d.otherParticipants = make([]uint32, 0)
@@ -149,7 +149,7 @@ func (d *DkgOperator) TriggeredToStartRound1() {
 // DoDkgRound1 初始化participant后执行Round1，完成并广播、接收数据后，执行Round2
 func (d *DkgOperator) DoDkgRound1() error {
 	glog.Infof("DoDkgRound1 otherParticipants: %v\n", d.otherParticipants)
-	d.participant = part.NewDkgParticipant(curve, d.id, d.threshold, d.total)
+	d.participant = ptcpt.NewDkgParticipant(curve, d.id, d.threshold, d.total)
 
 	//nodeBcast, nodeP2psend, _ := d.participant.Round1(secret)
 	dkgRound1, err := d.participant.DkgRound1(d.threshold, d.total)
@@ -157,7 +157,7 @@ func (d *DkgOperator) DoDkgRound1() error {
 		glog.Errorf("")
 	}
 
-	dkgR1Outs := make(map[uint32]*part.DkgRound1Bcast, d.total)
+	dkgR1Outs := make(map[uint32]*ptcpt.DkgRound1Bcast, d.total)
 	//bcast := make(map[uint32]kdkg.Round1Bcast)
 	//nodeP2p := make(map[uint32]*kdkg.Round1P2PSendPacket)
 	// 当前节点i 的 nodeP2p[j] 为其它节点（例如j）的发来的nodeP2pJ[i]
@@ -175,10 +175,8 @@ func (d *DkgOperator) DoDkgRound1() error {
 		}
 		select {
 		case recv := <-d.ChanRecvRound1:
-			//bcast[recv.Id] = recv.Bcastj
-			//nodeP2p[recv.Id] = recv.P2pj[d.id]
 			dkgR1Outs[recv.Id] = recv.Round1Bcast
-		case <-time.After(200 * time.Second):
+		case <-time.After(260 * time.Second):
 			glog.Error("等待Round1Recv通道阻塞超时")
 			return errors.New("Dkg Round1 Receive Wait timeout")
 		}
@@ -190,7 +188,7 @@ func (d *DkgOperator) DoDkgRound1() error {
 }
 
 // DoDkgRound2 执行Round2，完成并广播、接收数据后，执行Round3与4
-func (d *DkgOperator) DoDkgRound2(dkgR1Outs map[uint32]*part.DkgRound1Bcast) error {
+func (d *DkgOperator) DoDkgRound2(dkgR1Outs map[uint32]*ptcpt.DkgRound1Bcast) error {
 	//nodeRound2Out, err := d.participant.Round2(bcast, p2p)
 	dkgR2Bcast, _, err := d.participant.DkgRound2(dkgR1Outs)
 	if err != nil {
@@ -215,7 +213,7 @@ func (d *DkgOperator) DoDkgRound2(dkgR1Outs map[uint32]*part.DkgRound1Bcast) err
 		case recv := <-d.ChanRecvRound2:
 			decommitments[recv.Id] = recv.Decommitment
 			shamirMap[recv.Id] = recv.ShamirShare
-		case <-time.After(20 * time.Second):
+		case <-time.After(100 * time.Second):
 			glog.Error("等待Round2Recv通道阻塞超时")
 			return errors.New("Dkg Round2 Receive Wait timeout")
 		}
@@ -236,7 +234,10 @@ func (d *DkgOperator) DoDkgRound3(decommitments map[uint32]*core.Witness, shamir
 		glog.Error("Participant执行Round3出错：", err)
 		return err
 	}
-	toSend := &DkgRound3Recv{Id: d.id, PsfProof: dkgR3OutMap[d.id]}
+	publicSharePoint, _ := curves.NewScalarBaseMult(d.participant.Curve, d.participant.GetShareXiFull().Value.BigInt())
+	publicShare := &dealer.PublicShare{Point: publicSharePoint}
+	toSend := &DkgRound3Recv{Id: d.id, PsfProof: dkgR3OutMap[d.id], PublicShare: publicShare}
+	d.publicShareMap[d.id] = publicShare
 	go d.SendToOtherNodesDkgRound3Out(*toSend)
 
 	for {
@@ -246,7 +247,8 @@ func (d *DkgOperator) DoDkgRound3(decommitments map[uint32]*core.Witness, shamir
 		select {
 		case recv := <-d.ChanRecvRound3:
 			dkgR3OutMap[recv.Id] = recv.PsfProof
-		case <-time.After(30 * time.Second):
+			d.publicShareMap[recv.Id] = recv.PublicShare
+		case <-time.After(50 * time.Second):
 			glog.Error("等待Round3Recv通道阻塞超时")
 			return errors.New("Dkg Round3 Receive Wait timeout")
 		}
@@ -267,6 +269,8 @@ func (d *DkgOperator) DoDkgRound4(psfProof map[uint32]paillier.PsfProof) error {
 	}
 	d.dkgResult = round4
 	d.available = true
+
+	GetSignOperator().UpdateInfo(d.id, d.threshold, d.total, d.participantAddrs, d.otherParticipants)
 	return nil
 }
 
@@ -283,4 +287,45 @@ func (d *DkgOperator) OtherNodeStartDkg(group *sync.WaitGroup) {
 			}
 		}()
 	}
+}
+
+func (d *DkgOperator) IsAvailable() bool {
+	return d.available
+}
+
+func (d *DkgOperator) NewSigner(cosigners []uint32) (*ptcpt.Signer, error) {
+	proofParams := make(map[uint32]*dealer.ProofParams, len(cosigners))
+	encryptKeys := make(map[uint32]*paillier.PublicKey, len(cosigners))
+	publicShare := make(map[uint32]*dealer.PublicShare, len(cosigners))
+	proofParams[d.id] = d.participant.GetProofParam()
+	encryptKeys[d.id] = &d.dkgResult.EncryptionKey.PublicKey
+	publicShare[d.id] = d.publicShareMap[d.id]
+	for _, id := range cosigners {
+		if id == d.id {
+			continue
+		}
+		proofParams[id] = d.dkgResult.ParticipantData[id].ProofParams
+		encryptKeys[id] = d.dkgResult.ParticipantData[id].PublicKey
+		publicShare[id] = d.publicShareMap[id]
+	}
+
+	secretKeyShare := &dealer.Share{
+		Point:       d.publicShareMap[d.id].Point,
+		ShamirShare: d.participant.GetShareXiFull(),
+	}
+	pData := &dealer.ParticipantData{
+		Id:             d.id,
+		EcdsaPublicKey: d.dkgResult.VerificationKey,
+		EncryptKeys:    encryptKeys,
+		DecryptKey:     d.dkgResult.EncryptionKey,
+		KeyGenType:     &dealer.DistributedKeyGenType{ProofParams: proofParams},
+		PublicShares:   publicShare, // TODO 可能传全部数据也可以
+		SecretKeyShare: secretKeyShare,
+	}
+	signer, err := ptcpt.NewSigner(pData, ecdsaVerifier, cosigners)
+	if err != nil {
+		glog.Errorf("创建Signer失败: %v\n", err.Error())
+		return nil, err
+	}
+	return signer, nil
 }

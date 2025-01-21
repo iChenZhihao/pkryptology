@@ -28,5 +28,11 @@ func Router() {
 		dkgGroup.POST("/round3/recv", api.GetDkgController().DoRound3Recv)
 	}
 
+	signGroup := engine.Group("/sign")
+	{
+		signGroup.POST("/signMsg", api.GetSignController().SignMsg)
+		signGroup.POST("/candidate", api.GetSignController().RecvAskCandidateInfo)
+	}
+
 	_ = engine.Run(fmt.Sprintf(":%s", global.Config.Server.Port))
 }

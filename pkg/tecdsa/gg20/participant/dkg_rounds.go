@@ -244,10 +244,10 @@ func ConvertToSigners(dkgParticipants map[uint32]*DkgParticipant, dkgResults map
 			H2: dkgParticipants[id].state.H2,
 		}
 
-		publicSharePoint, _ := curves.NewScalarBaseMult(pk.Curve, dkgParticipants[id].state.Xii.Value.BigInt())
+		publicSharePoint, _ := curves.NewScalarBaseMult(pk.Curve, dkgParticipants[id].state.XiFull.Value.BigInt())
 		shareMap[id] = &dealer.Share{
 			Point:       publicSharePoint,
-			ShamirShare: dkgParticipants[id].state.Xii,
+			ShamirShare: dkgParticipants[id].state.XiFull,
 		}
 	}
 
@@ -261,16 +261,14 @@ func ConvertToSigners(dkgParticipants map[uint32]*DkgParticipant, dkgResults map
 			DecryptKey:     dkgResults[id].EncryptionKey,
 			KeyGenType:     &dealer.DistributedKeyGenType{ProofParams: proofParams},
 			PublicShares:   publicShare,
+			SecretKeyShare: shareMap[id],
 		}
-
-		p.SecretKeyShare = shareMap[id]
 
 		signer, err := NewSigner(p, ecdsaVerifier, cosigners)
 		if err != nil {
 			fmt.Printf("New Signer Error: %v\n", err)
 		}
 		signers[id] = signer
-		signers[id].threshold = threshold
 	}
 
 	return pk, signers

@@ -1,4 +1,4 @@
-package response
+package respvo
 
 import (
 	"github.com/gin-gonic/gin"

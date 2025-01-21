@@ -317,6 +317,14 @@ func (dp *DkgParticipant) GetShamirShamirX() []*v1.ShamirShare {
 	return dp.state.X
 }
 
+func (dp *DkgParticipant) GetProofParam() *dealer.ProofParams {
+	return &dealer.ProofParams{N: dp.state.N, H1: dp.state.H1, H2: dp.state.H2}
+}
+
+func (dp *DkgParticipant) GetShareXiFull() *v1.ShamirShare {
+	return dp.state.XiFull
+}
+
 type dkgParticipantData struct {
 	PublicKey   *paillier.PublicKey
 	ProofParams *dealer.ProofParams
@@ -342,8 +350,8 @@ type dkgstate struct {
 	// Commitments and paillier public keys received from other participants
 	otherParticipantData map[uint32]*dkgParticipantData
 	// xi returned from Round 3
-	Xi  *big.Int
-	Xii *v1.ShamirShare
+	Xi     *big.Int
+	XiFull *v1.ShamirShare
 	// X1,...,Xn returned from Round 3
 	PublicShares []*curves.EcPoint //每个节点的PublicShares都是一样的
 }

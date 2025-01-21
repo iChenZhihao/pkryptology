@@ -1,4 +1,4 @@
-package dkg
+package node
 
 import (
 	v1 "github.com/coinbase/kryptology/pkg/sharing/v1"

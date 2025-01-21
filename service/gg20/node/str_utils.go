@@ -1,4 +1,4 @@
-package dkg
+package node
 
 import (
 	"encoding/base64"
@@ -43,4 +43,8 @@ func Base64DecodeSecret(secretStr string) []byte {
 	}
 	decodedData, _ := base64.StdEncoding.DecodeString(secretStr)
 	return decodedData
+}
+
+func GetAskCosignerCandidateUrl(nodeAddr string) string {
+	return fmt.Sprintf("http://%s/sign/candidate", nodeAddr)
 }
