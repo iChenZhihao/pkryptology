@@ -9,7 +9,7 @@ import (
 
 func InitZookeeper() {
 	zkcfg := global.Config.Zookeeper
-	glog.Info("Loaded config: %+v\n", zkcfg)
+	glog.Infof("Loaded config: %+v\n", zkcfg)
 
 	zkManager := zkp.GetZkManager()
 	err := zkManager.Init(zkcfg.Servers, time.Duration(zkcfg.SessionTimeout)*time.Millisecond)

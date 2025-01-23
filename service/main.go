@@ -7,8 +7,9 @@ import (
 )
 
 func main() {
-	err := flag.Set("logtostderr", "true")
-	if err != nil {
+	err := flag.Set("alsologtostderr", "true")
+	err2 := flag.Set("log_dir", "./logs")
+	if err != nil || err2 != nil {
 		return
 	} // 将日志输出到控制台
 	//flag.Parse()

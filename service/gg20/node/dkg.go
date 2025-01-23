@@ -266,6 +266,7 @@ func (d *DkgOperator) DoDkgRound4(psfProof map[uint32]paillier.PsfProof) error {
 	d.available = true
 
 	GetSignOperator().UpdateInfo(d.id, d.threshold, d.total, d.participantAddrs, d.otherParticipants)
+	glog.Info("DKG完成，可以开始签名")
 	return nil
 }
 
