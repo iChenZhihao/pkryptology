@@ -21,6 +21,7 @@ func (s *SignOperator) DoAskForCosignerCandidate(workId string) {
 				glog.Errorf("请求获取Cosigner失败: %v\n", err)
 			}
 			info, exist := s.signerMap[candidate.WorkId[1:len(candidate.WorkId)-1]]
+			//反序列化响应数据，string的WorkId会前后各多一个"号，需要将其去掉
 			if !exist {
 				glog.Error("当前WorkId对应的SignerInfo不存在：", candidate.WorkId)
 			}

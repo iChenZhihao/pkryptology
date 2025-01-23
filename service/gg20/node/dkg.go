@@ -3,7 +3,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/coinbase/kryptology/pkg/core"
 	"github.com/coinbase/kryptology/pkg/core/curves"
 	"github.com/coinbase/kryptology/pkg/paillier"
@@ -12,7 +11,6 @@ import (
 	ptcpt "github.com/coinbase/kryptology/pkg/tecdsa/gg20/participant"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"math/big"
 	"sync"
 	"time"
 )
@@ -20,9 +18,8 @@ import (
 const DkgSecretKey = "secret"
 
 var (
-	operator     *DkgOperator
-	once         sync.Once
-	generator, _ = curves.NewScalarBaseMult(btcec.S256(), big.NewInt(4765))
+	operator *DkgOperator
+	once     sync.Once
 
 	ecdsaVerifier = func(verKey *curves.EcPoint, hash []byte, sig *curves.EcdsaSignature) bool {
 		pk := &ecdsa.PublicKey{
@@ -71,7 +68,7 @@ type DkgRound3Recv struct {
 
 func GetDkgOperator() *DkgOperator {
 	once.Do(func() {
-		operator = &DkgOperator{}
+		operator = &DkgOperator{available: false}
 	})
 	return operator
 }
@@ -120,6 +117,7 @@ func (d *DkgOperator) UpdateClusterInfo(nodeAddress string, participants []strin
 	glog.Info("update dkgOperator info success!!!~~~~~~~~~")
 }
 
+// StartDkg 作为Leader开启Dkg流程
 func (d *DkgOperator) StartDkg() error {
 	d.cond.RLock()
 	defer d.cond.RUnlock()
@@ -135,6 +133,7 @@ func (d *DkgOperator) StartDkg() error {
 	return nil
 }
 
+// TriggeredToStartRound1 被触发开启Dkg流程
 func (d *DkgOperator) TriggeredToStartRound1() {
 	d.cond.RLock()
 	defer d.cond.RUnlock()
@@ -151,18 +150,14 @@ func (d *DkgOperator) DoDkgRound1() error {
 	glog.Infof("DoDkgRound1 otherParticipants: %v\n", d.otherParticipants)
 	d.participant = ptcpt.NewDkgParticipant(curve, d.id, d.threshold, d.total)
 
-	//nodeBcast, nodeP2psend, _ := d.participant.Round1(secret)
 	dkgRound1, err := d.participant.DkgRound1(d.threshold, d.total)
 	if err != nil {
 		glog.Errorf("")
 	}
 
 	dkgR1Outs := make(map[uint32]*ptcpt.DkgRound1Bcast, d.total)
-	//bcast := make(map[uint32]kdkg.Round1Bcast)
-	//nodeP2p := make(map[uint32]*kdkg.Round1P2PSendPacket)
-	// 当前节点i 的 nodeP2p[j] 为其它节点（例如j）的发来的nodeP2pJ[i]
 
-	// 给其它节点广播nodeP2psend
+	// 给其它节点广播dkgRound1结果
 	toSend := &DkgRound1Recv{Id: d.id, Round1Bcast: dkgRound1}
 	go d.SendToOtherNodesDkgRound1Out(*toSend)
 
@@ -176,7 +171,7 @@ func (d *DkgOperator) DoDkgRound1() error {
 		select {
 		case recv := <-d.ChanRecvRound1:
 			dkgR1Outs[recv.Id] = recv.Round1Bcast
-		case <-time.After(260 * time.Second):
+		case <-time.After(400 * time.Second):
 			glog.Error("等待Round1Recv通道阻塞超时")
 			return errors.New("Dkg Round1 Receive Wait timeout")
 		}
@@ -189,21 +184,18 @@ func (d *DkgOperator) DoDkgRound1() error {
 
 // DoDkgRound2 执行Round2，完成并广播、接收数据后，执行Round3与4
 func (d *DkgOperator) DoDkgRound2(dkgR1Outs map[uint32]*ptcpt.DkgRound1Bcast) error {
-	//nodeRound2Out, err := d.participant.Round2(bcast, p2p)
 	dkgR2Bcast, _, err := d.participant.DkgRound2(dkgR1Outs)
 	if err != nil {
 		glog.Error("Participant执行Round2出错：", err)
 		return err
 	}
-	//round3Input := make(map[uint32]kdkg.Round2Bcast)
 	decommitments := make(map[uint32]*core.Witness, d.total)
 	decommitments[d.id] = dkgR2Bcast.Di
 	shamirMap := make(map[uint32]*v1.ShamirShare, d.total)
 	X := d.participant.GetShamirShamirX()
 	shamirMap[d.id] = X[d.id-1]
 
-	toSend := &DkgRound2Recv{Id: d.id, Decommitment: dkgR2Bcast.Di}
-	go d.SendToOtherNodesDkgRound2Out(*toSend, X)
+	go d.SendToOtherNodesDkgRound2Out(dkgR2Bcast.Di, X)
 
 	for {
 		if len(decommitments) == len(d.participantAddrs) {
@@ -234,7 +226,10 @@ func (d *DkgOperator) DoDkgRound3(decommitments map[uint32]*core.Witness, shamir
 		glog.Error("Participant执行Round3出错：", err)
 		return err
 	}
-	publicSharePoint, _ := curves.NewScalarBaseMult(d.participant.Curve, d.participant.GetShareXiFull().Value.BigInt())
+	publicSharePoint, err := curves.NewScalarBaseMult(d.participant.Curve, d.participant.GetShareXiFull().Value.BigInt())
+	if err != nil {
+		return err
+	}
 	publicShare := &dealer.PublicShare{Point: publicSharePoint}
 	toSend := &DkgRound3Recv{Id: d.id, PsfProof: dkgR3OutMap[d.id], PublicShare: publicShare}
 	d.publicShareMap[d.id] = publicShare

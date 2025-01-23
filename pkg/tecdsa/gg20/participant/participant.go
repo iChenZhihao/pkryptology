@@ -49,18 +49,30 @@ func NewSigner(info *dealer.ParticipantData, verify curves.EcdsaVerify, cosigner
 
 	// Skinny down the sharesMap to just the chosen ones
 	chosenOnes := make(map[uint32]*dealer.PublicShare, len(cosigners))
+	var otherCosigner []uint32
 	for _, id := range cosigners {
 		chosenOnes[id] = info.PublicShares[id]
+		if id != p.Share.Identifier {
+			otherCosigner = append(otherCosigner, id)
+		}
 	}
 
 	// Convert to additive shares and return the resultx
-	return p.PrepareToSign(
+	sign, err := p.PrepareToSign(
 		info.EcdsaPublicKey,
 		verify,
 		info.EcdsaPublicKey.Curve,
 		info.KeyGenType,
 		chosenOnes,
 		info.EncryptKeys)
+	if err != nil {
+		return nil, err
+	}
+	err = sign.setCosigners(otherCosigner)
+	if err != nil {
+		return nil, err
+	}
+	return sign, nil
 }
 
 // verifyStateMap verifies the round is the expected round number and

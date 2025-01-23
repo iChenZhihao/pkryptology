@@ -1,7 +1,6 @@
 package zkp
 
 import (
-	"fmt"
 	"github.com/coinbase/kryptology/service/gg20/node"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -24,9 +23,6 @@ func TriggerDKG(nodeCount int) error {
 		return nodeCountDontMatch
 	}
 
-	//for index, nodeAddress := range children {
-	//	glog.Infof("节点:%d号，地址:%s\n", index, nodeAddress)
-	//}
 	operator := node.GetDkgOperator()
 	operator.UpdateClusterInfo(GetZkManager().nodeAddress, children) // 更新集群信息，并设置其状态为不可用
 
@@ -49,24 +45,11 @@ func TriggerDKG(nodeCount int) error {
 		executeDKG(GetZkManager().nodeAddress, children)
 	}
 
-	//if err := zkLock.Acquire(); err != nil {
-	//	glog.Info("获取分布式锁失败: ", err)
-	//	return nil
-	//}
-	//defer func() {
-	//	if err := zkLock.Release(); err != nil {
-	//		glog.Error("释放锁失败: ", err)
-	//	}
-	//}()
-
-	// 执行DKG逻辑
-	//executeDKG()
 	return nil
 }
 
 func executeDKG(myaddress string, nodes []string) {
 	glog.Info("Executing DKG...")
-	fmt.Println(myaddress)
 	err := node.GetDkgOperator().StartDkg()
 	if err != nil {
 		glog.Errorf("执行Dkg失败：%v", err.Error())

@@ -244,19 +244,18 @@ func ConvertToSigners(dkgParticipants map[uint32]*DkgParticipant, dkgResults map
 			H2: dkgParticipants[id].state.H2,
 		}
 
-		publicSharePoint, _ := curves.NewScalarBaseMult(pk.Curve, dkgParticipants[id].state.XiFull.Value.BigInt())
+		publicSharePoint, _ := curves.NewScalarBaseMult(pk.Curve, dkgParticipants[id].GetShareXiFull().Value.BigInt())
 		shareMap[id] = &dealer.Share{
 			Point:       publicSharePoint,
-			ShamirShare: dkgParticipants[id].state.XiFull,
+			ShamirShare: dkgParticipants[id].GetShareXiFull(),
 		}
+		publicShare[id] = &dealer.PublicShare{Point: publicSharePoint}
 	}
-
-	publicShare, _ = dealer.PreparePublicShares(shareMap)
 
 	for _, id := range cosigners {
 		p := &dealer.ParticipantData{
 			Id:             id,
-			EcdsaPublicKey: dkgParticipants[id].state.Y,
+			EcdsaPublicKey: dkgResults[id].VerificationKey,
 			EncryptKeys:    encryptKeys,
 			DecryptKey:     dkgResults[id].EncryptionKey,
 			KeyGenType:     &dealer.DistributedKeyGenType{ProofParams: proofParams},

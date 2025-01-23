@@ -29,7 +29,6 @@ func DoSendStartDkg(requestUrl string) error {
 // DoSendBroadcastRound1 sends a message to a single node via HTTP POST.
 func DoSendBroadcastRound1(url string, message DkgRound1Recv) error {
 	responseByte, err := httpClient.Post(url, nil, message)
-	//glog.Infof("responseByte: %v", responseByte)
 	if err != nil {
 		return err
 	}
@@ -41,7 +40,7 @@ func DoSendBroadcastRound1(url string, message DkgRound1Recv) error {
 	}
 	if !response.Success {
 		glog.Errorf("not success: %v", err.Error())
-		return fmt.Errorf("DoSendStartDkg Fail")
+		return fmt.Errorf("DoSendBroadcastRound1 Fail")
 	}
 	return nil
 }
@@ -60,7 +59,7 @@ func DoSendBroadcastRound2(url string, message DkgRound2Recv) error {
 	}
 	if !response.Success {
 		glog.Errorf("not success: %v", err.Error())
-		return fmt.Errorf("DoSendStartDkg Fail")
+		return fmt.Errorf("DoSendBroadcastRound2 Fail")
 	}
 	return nil
 }
@@ -79,7 +78,7 @@ func DoSendBroadcastRound3(url string, message DkgRound3Recv) error {
 	}
 	if !response.Success {
 		glog.Errorf("not success: %v", err.Error())
-		return fmt.Errorf("DoSendStartDkg Fail")
+		return fmt.Errorf("DoSendBroadcastRound3 Fail")
 	}
 	return nil
 }

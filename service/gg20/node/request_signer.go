@@ -25,10 +25,27 @@ func DoSendAskForCosignerCandidate(nodeAddress, workId string) (*CandidateInfo, 
 		return nil, fmt.Errorf(response.Message)
 	}
 
-	glog.Infof("data: %v\n", response.Data)
 	info, ok := response.Data.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("返回数据类型不匹配")
 	}
 	return &CandidateInfo{Id: uint32(info["id"].(float64)), WorkId: info["workId"].(string)}, nil
+}
+
+func DoPostWithoutRespData(requestUrl string, data interface{}) error {
+	post, err := httpClient.Post(requestUrl, nil, data)
+	if err != nil {
+		return err
+	}
+	var resp respvo.Response
+	err = json.Unmarshal(post, &resp)
+	if err != nil {
+		glog.Errorf("unmarshal error: %v", err.Error())
+		return err
+	}
+	if !resp.Success {
+		glog.Errorf("not success: %v", err.Error())
+		return fmt.Errorf("DoSendStartDkg Fail")
+	}
+	return nil
 }

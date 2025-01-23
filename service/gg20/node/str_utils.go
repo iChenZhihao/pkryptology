@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const Protocol = "http://"
+
 // SecretStrToBase64Str 对secret串进行base64编码
 func SecretStrToBase64Str(secret string) string {
 	if secret == "" {
@@ -22,19 +24,19 @@ func SecretStrToBytes(secret string) []byte {
 }
 
 func OtherNodeStartDkgUrl(nodeAddr string) string {
-	return fmt.Sprintf("http://%s/dkg/round1", nodeAddr)
+	return fmt.Sprintf("%s%s/dkg/round1", Protocol, nodeAddr)
 }
 
 func GetDkgRound1BcastUrl(nodeAddr string) string {
-	return fmt.Sprintf("http://%s/dkg/round1/recv", nodeAddr)
+	return fmt.Sprintf("%s%s/dkg/round1/recv", Protocol, nodeAddr)
 }
 
 func GetDkgRound2BcastUrl(nodeAddr string) string {
-	return fmt.Sprintf("http://%s/dkg/round2/recv", nodeAddr)
+	return fmt.Sprintf("%s%s/dkg/round2/recv", Protocol, nodeAddr)
 }
 
 func GetDkgRound3BcastUrl(nodeAddr string) string {
-	return fmt.Sprintf("http://%s/dkg/round3/recv", nodeAddr)
+	return fmt.Sprintf("%s%s/dkg/round3/recv", Protocol, nodeAddr)
 }
 
 func Base64DecodeSecret(secretStr string) []byte {
@@ -46,5 +48,33 @@ func Base64DecodeSecret(secretStr string) []byte {
 }
 
 func GetAskCosignerCandidateUrl(nodeAddr string) string {
-	return fmt.Sprintf("http://%s/sign/candidate", nodeAddr)
+	return fmt.Sprintf("%s%s/sign/candidate", Protocol, nodeAddr)
+}
+
+func GetOtherStartSignUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round1", Protocol, nodeAddr)
+}
+
+func GetSignRound1BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round1/recv", Protocol, nodeAddr)
+}
+
+func GetSignRound2BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round2/recv", Protocol, nodeAddr)
+}
+
+func GetSignRound3BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round3/recv", Protocol, nodeAddr)
+}
+
+func GetSignRound4BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round4/recv", Protocol, nodeAddr)
+}
+
+func GetSignRound5BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round5/recv", Protocol, nodeAddr)
+}
+
+func GetSignRound6BcastUrl(nodeAddr string) string {
+	return fmt.Sprintf("%s%s/sign/round6/recv", Protocol, nodeAddr)
 }

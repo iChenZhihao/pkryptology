@@ -32,6 +32,13 @@ func Router() {
 	{
 		signGroup.POST("/signMsg", api.GetSignController().SignMsg)
 		signGroup.POST("/candidate", api.GetSignController().RecvAskCandidateInfo)
+		signGroup.POST("/round1", api.GetSignController().DoSignRound1)
+		signGroup.POST("/round1/recv", api.GetSignController().DoSignRound1Recv)
+		signGroup.POST("/round2/recv", api.GetSignController().DoSignRound2Recv)
+		signGroup.POST("/round3/recv", api.GetSignController().DoSignRound3Recv)
+		signGroup.POST("/round4/recv", api.GetSignController().DoSignRound4Recv)
+		signGroup.POST("/round5/recv", api.GetSignController().DoSignRound5Recv)
+		signGroup.POST("/round6/recv", api.GetSignController().DoSignRound6Recv)
 	}
 
 	_ = engine.Run(fmt.Sprintf(":%s", global.Config.Server.Port))
