@@ -8,7 +8,7 @@ cron:
 
 zookeeper:
   servers:
-    - "49.234.153.15:2181"
+    - "127.0.0.1:2181"
   sessionTimeout: 10000  #ms
 
 gg20:

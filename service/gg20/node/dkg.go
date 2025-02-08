@@ -16,6 +16,7 @@ import (
 )
 
 const DkgSecretKey = "secret"
+const Round1Wait = 400
 
 var (
 	operator *DkgOperator
@@ -152,17 +153,16 @@ func (d *DkgOperator) DoDkgRound1() error {
 
 	dkgRound1, err := d.participant.DkgRound1(d.threshold, d.total)
 	if err != nil {
-		glog.Errorf("")
+		glog.Error(err)
+		return err
 	}
 
 	dkgR1Outs := make(map[uint32]*ptcpt.DkgRound1Bcast, d.total)
-
 	// 给其它节点广播dkgRound1结果
 	toSend := &DkgRound1Recv{Id: d.id, Round1Bcast: dkgRound1}
 	go d.SendToOtherNodesDkgRound1Out(*toSend)
 
 	dkgR1Outs[d.id] = dkgRound1
-
 	// 等待其它节点发来的数据
 	for {
 		if len(dkgR1Outs) == len(d.participantAddrs) {
@@ -171,15 +171,12 @@ func (d *DkgOperator) DoDkgRound1() error {
 		select {
 		case recv := <-d.ChanRecvRound1:
 			dkgR1Outs[recv.Id] = recv.Round1Bcast
-		case <-time.After(400 * time.Second):
-			glog.Error("等待Round1Recv通道阻塞超时")
+		case <-time.After(Round1Wait * time.Second):
 			return errors.New("Dkg Round1 Receive Wait timeout")
 		}
 	}
 	err = d.DoDkgRound2(dkgR1Outs)
-
 	return nil
-
 }
 
 // DoDkgRound2 执行Round2，完成并广播、接收数据后，执行Round3与4
@@ -267,6 +264,7 @@ func (d *DkgOperator) DoDkgRound4(psfProof map[uint32]paillier.PsfProof) error {
 
 	GetSignOperator().UpdateInfo(d.id, d.threshold, d.total, d.participantAddrs, d.otherParticipants)
 	glog.Info("DKG完成，可以开始签名")
+	glog.Info(d.dkgResult.VerificationKey)
 	return nil
 }
 

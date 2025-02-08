@@ -95,7 +95,6 @@ func (s *SignOperator) SignMsg(plainMsg []byte) (*curves.EcdsaSignature, error) 
 	}
 
 	glog.Info("确定了cosigner：", s.signerMap[signerInfo.workId].cosigner)
-
 	hashMsg, err := core.Hash(plainMsg, curve)
 	if err != nil {
 		return nil, err

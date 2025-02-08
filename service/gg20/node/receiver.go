@@ -1,6 +1,6 @@
 package node
 
-// RecvDkgRound1 接收其它节点（称之为j）发来的第一轮数据
+// RecvDkgRound1 接收其它节点发来的第一轮数据
 func (d *DkgOperator) RecvDkgRound1(recv DkgRound1Recv) {
 	d.ChanRecvRound1 <- recv
 }

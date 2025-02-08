@@ -52,7 +52,11 @@ func (m *ZkManager) updateStabilityTimer(nodeCount int) {
 		// 创建新的计时器
 		stableTimer = time.AfterFunc(global.Config.GG20.GetStableTimeWindow(), func() {
 			// 计时器到期时触发DKG
-			TriggerDKG(nodeCount)
+			err := TriggerDKG(nodeCount)
+			if err != nil {
+				glog.Error("触发执行DKG失败：", err.Error())
+				return
+			}
 		})
 		glog.Infof("节点数变动，重置稳定窗口计时器为 %v 毫秒 \n", global.Config.GG20.GetStableTimeWindow().Milliseconds())
 	}
