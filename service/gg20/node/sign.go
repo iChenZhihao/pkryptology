@@ -17,6 +17,8 @@ var (
 	signOperator *SignOperator
 )
 
+const SignRoundWait = 37
+
 func GetSignOperator() *SignOperator {
 	signOnce.Do(func() {
 		signOperator = &SignOperator{
@@ -85,7 +87,7 @@ func (s *SignOperator) SignMsg(plainMsg []byte) (*curves.EcdsaSignature, error) 
 		select {
 		case recv := <-signerInfo.candidateInfoChan:
 			signerInfo.cosigner = append(signerInfo.cosigner, recv.Id)
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			return nil, fmt.Errorf("%d节点等待确定其它cosigner超时", s.id)
 		}
 	}
@@ -163,7 +165,7 @@ func (si *SignerInfo) DoSignRound1() (*curves.EcdsaSignature, error) {
 			}
 			signerOut[recv.Id] = recv.SignerOut
 			r1P2pIn[recv.Id] = recv.R1P2PSend
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound1Recv通道阻塞超时")
 			return nil, errors.New("Sign Round1 Receive Wait timeout")
 		}
@@ -189,7 +191,7 @@ func (si *SignerInfo) DoSignRound2(params map[uint32]*ptcpt.Round1Bcast, p2p map
 				continue
 			}
 			r3In[recv.Id] = recv.P2pSend
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound2Recv通道阻塞超时")
 			return nil, errors.New("Sign Round2 Receive Wait timeout")
 		}
@@ -215,7 +217,7 @@ func (si *SignerInfo) DoSignRound3(r3In map[uint32]*ptcpt.P2PSend) (*curves.Ecds
 				continue
 			}
 			r4In[recv.Id] = recv.Round3Bcast
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound3Recv通道阻塞超时")
 			return nil, errors.New("Sign Round3 Receive Wait timeout")
 		}
@@ -242,7 +244,7 @@ func (si *SignerInfo) DoSignRound4(r4In map[uint32]*ptcpt.Round3Bcast) (*curves.
 				continue
 			}
 			r5In[recv.Id] = recv.Round4Bcast
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound4Recv通道阻塞超时")
 			return nil, errors.New("Sign Round4 Receive Wait timeout")
 		}
@@ -270,7 +272,7 @@ func (si *SignerInfo) DoSignRound5(r5In map[uint32]*ptcpt.Round4Bcast) (*curves.
 			}
 			r6In[recv.Id] = recv.Round5Bcast
 			r6P2p[recv.Id] = recv.Round5P2pSend
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound5Recv通道阻塞超时")
 			return nil, errors.New("Sign Round5 Receive Wait timeout")
 		}
@@ -296,7 +298,7 @@ func (si *SignerInfo) DoSignRound6(r6In map[uint32]*ptcpt.Round5Bcast, r6P2p map
 				continue
 			}
 			signOutIn[recv.Id] = recv.Round6FullBcast
-		case <-time.After(15 * time.Second):
+		case <-time.After(SignRoundWait * time.Second):
 			glog.Error("等待SignerRound6Recv通道阻塞超时")
 			return nil, errors.New("Sign Round6 Receive Wait timeout")
 		}

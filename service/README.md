@@ -58,3 +58,18 @@ POST http://<node_endpoint>/sign/signMsg
 }
 ```
 
+新添加了一键启动/关闭脚本
+```shell
+# 同样以编译出的文件为gg20-node
+# 执行：
+./nodes.sh start 7
+# 即可后台批量启动7个节点，也可以不传节点数，不传时默认节点数为5
+# 启动后的端口号为9080, 9081, ... , 9080+node_count-1, 
+#      可以自行修改nodes.sh中的DEFAULT_START_PORT参数以调整端口起始值
+# 相关日志将输出在./logs/之下
+
+# 执行：
+./nodes.sh stop
+# 即可一键关闭启动的以gg20-node为名的进程节点
+```
+
