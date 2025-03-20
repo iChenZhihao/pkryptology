@@ -1,0 +1,15 @@
+# 启动端口号
+server:
+  port: 8080
+
+# 定时任务
+cron:
+  enable: true
+
+zookeeper:
+  servers:
+    - "127.0.0.1:2181"
+  sessionTimeout: 10000  #ms
+
+gg20:
+  stableTimeWindow: 5000  #ms

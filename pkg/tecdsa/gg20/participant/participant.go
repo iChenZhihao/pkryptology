@@ -36,33 +36,43 @@ type Signer struct {
 	// This is minimum number of signers required to produce a valid signature,
 	// not the security threshold (as specified in [spec][GG20])
 	threshold uint
-	PublicKey *curves.EcPoint
+	PublicKey *curves.EcPoint //为最终聚合后的公钥
 	Curve     elliptic.Curve
 	Round     uint   // current signing round in our linear state machine
 	state     *state // Accumulated intermediate values associated with signing
 }
 
 // NewSigner C=creates a new signer from a dealer-provided output and a specific set of co-signers
-func NewSigner(info *dealer.ParticipantData, cosigners []uint32) (*Signer, error) {
+func NewSigner(info *dealer.ParticipantData, verify curves.EcdsaVerify, cosigners []uint32) (*Signer, error) {
 	// Create the participant
 	p := Participant{*info.SecretKeyShare, info.DecryptKey}
 
 	// Skinny down the sharesMap to just the chosen ones
 	chosenOnes := make(map[uint32]*dealer.PublicShare, len(cosigners))
+	var otherCosigner []uint32
 	for _, id := range cosigners {
 		chosenOnes[id] = info.PublicShares[id]
+		if id != p.Share.Identifier {
+			otherCosigner = append(otherCosigner, id)
+		}
 	}
 
 	// Convert to additive shares and return the resultx
-	return p.PrepareToSign(
+	sign, err := p.PrepareToSign(
 		info.EcdsaPublicKey,
-		func(*curves.EcPoint, []byte, *curves.EcdsaSignature) bool {
-			return true
-		},
+		verify,
 		info.EcdsaPublicKey.Curve,
 		info.KeyGenType,
 		chosenOnes,
 		info.EncryptKeys)
+	if err != nil {
+		return nil, err
+	}
+	err = sign.setCosigners(otherCosigner)
+	if err != nil {
+		return nil, err
+	}
+	return sign, nil
 }
 
 // verifyStateMap verifies the round is the expected round number and
@@ -303,6 +313,30 @@ type DkgParticipant struct {
 	Round uint
 }
 
+func NewDkgParticipant(curve elliptic.Curve, id uint32, threshold, total uint32) *DkgParticipant {
+	return &DkgParticipant{
+		Curve: curve,
+		id:    id,
+		Round: 1,
+		state: &dkgstate{
+			Threshold: threshold,
+			Limit:     total,
+		},
+	}
+}
+
+func (dp *DkgParticipant) GetShamirShamirX() []*v1.ShamirShare {
+	return dp.state.X
+}
+
+func (dp *DkgParticipant) GetProofParam() *dealer.ProofParams {
+	return &dealer.ProofParams{N: dp.state.N, H1: dp.state.H1, H2: dp.state.H2}
+}
+
+func (dp *DkgParticipant) GetShareXiFull() *v1.ShamirShare {
+	return dp.state.XiFull
+}
+
 type dkgParticipantData struct {
 	PublicKey   *paillier.PublicKey
 	ProofParams *dealer.ProofParams
@@ -328,9 +362,10 @@ type dkgstate struct {
 	// Commitments and paillier public keys received from other participants
 	otherParticipantData map[uint32]*dkgParticipantData
 	// xi returned from Round 3
-	Xi *big.Int
+	Xi     *big.Int
+	XiFull *v1.ShamirShare
 	// X1,...,Xn returned from Round 3
-	PublicShares []*curves.EcPoint
+	PublicShares []*curves.EcPoint //每个节点的PublicShares都是一样的
 }
 
 // Check DKG round number is valid

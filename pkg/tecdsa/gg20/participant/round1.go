@@ -32,6 +32,7 @@ type Round1P2PSend = proof.Range1Proof
 // NOTE: Pseudocode shows N~, h1, h2, the curve's g, q, and signer's public key as inputs
 // Since `signer` already knows the paillier secret and public keys, this input is not necessary here
 // `participant.PrepareToSign` receives the other inputs and stores them as state variables.
+// ECDSA
 func (signer *Signer) SignRound1() (*Round1Bcast, map[uint32]*Round1P2PSend, error) {
 	if signer == nil || signer.Curve == nil {
 		return nil, nil, internal.ErrNilArguments
@@ -61,33 +62,34 @@ func (signer *Signer) SignRound1() (*Round1Bcast, map[uint32]*Round1P2PSend, err
 		return nil, nil, err
 	}
 
-	// 4. C_i, D_i = Commit(\Gamma_i)
+	// 4. C_i, D_i = Commit(\Gamma_i) 计算承诺
 	Ci, Di, err := core.Commit(Gamma.Bytes())
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// 5. c_i, r_i = PaillierEncryptAndReturnRandomness(pk_i, k_i)
-	ctxt, r, err := pk.Encrypt(k)
+	ctxt, r, err := pk.Encrypt(k) // ctxt:paillier加密后的密文 r:该次加密生成的随机数
 	if err != nil {
 		return nil, nil, err
 	}
 
 	pp := proof.Proof1Params{
-		Curve: signer.Curve,
-		Pk:    pk,
-		A:     k,
-		C:     ctxt,
-		R:     r,
+		Curve: signer.Curve, //曲线
+		Pk:    pk,           //该signer的paillier公钥
+		A:     k,            //该signer在本次加密选取的随机数
+		C:     ctxt,         //ctxt:paillier加密后的密文
+		R:     r,            // 该次加密生成的随机数
 	}
 	bcast := Round1Bcast{
-		Identifier: signer.id,
-		C:          Ci,
-		Ctxt:       ctxt,
+		Identifier: signer.id, //该signer的id
+		C:          Ci,        //对于Gamma_i的承诺值
+		Ctxt:       ctxt,      //ctxt:paillier加密后的密文
 	}
 	p2p := make(map[uint32]*Round1P2PSend)
 
 	if signer.state.keyGenType.IsTrustedDealer() {
+		// 使用中心化的密钥生成
 		pp.DealerParams = signer.state.keyGenType.GetProofParams(1)
 		// 6. TrustedDealer - \pi_i^{\Range1} = MtAProveRange1(g,q,pk_i,N~,h_1,h_2,k_i,c_i,r_i)
 		bcast.Proof, err = pp.Prove()
@@ -95,10 +97,13 @@ func (signer *Signer) SignRound1() (*Round1Bcast, map[uint32]*Round1P2PSend, err
 			return nil, nil, err
 		}
 	} else {
+		// 使用分布式密钥生成（后续一般用它）
 		// 6. (figure 8.)DKG - for j = [1,...,t+1]
 		for id := range signer.state.cosigners {
+			// 获取当前节点要发给其他节点的Prove证明
 			// 7. DKG if i == j, continue
 			if signer.id == id {
+				// 为自己
 				continue
 			}
 			pp.DealerParams = signer.state.keyGenType.GetProofParams(id)

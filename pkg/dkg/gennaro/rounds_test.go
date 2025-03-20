@@ -269,7 +269,7 @@ func TestParticipantRound4RepeatCall(t *testing.T) {
 	require.Equal(t, publicShares1, publicShares2)
 }
 
-// Test all Gennaro DKG rounds
+// Test all Gennaro DKG rounds 全部四轮DKG
 func TestAllGennaroDkgRounds(t *testing.T) {
 	// Initiate two participants
 	p1, _ := NewParticipant(1, 2, testGenerator, curves.NewK256Scalar(), 2)
