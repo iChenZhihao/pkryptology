@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/coinbase/kryptology/pkg/core/curves"
 	"github.com/coinbase/kryptology/service/respvo"
 	"github.com/coinbase/kryptology/service/utils"
 	"github.com/golang/glog"
@@ -81,4 +82,15 @@ func DoSendBroadcastRound3(url string, message DkgRound3Recv) error {
 		return fmt.Errorf("DoSendBroadcastRound3 Fail")
 	}
 	return nil
+}
+
+func SavePublicKey(pk curves.EcPoint) {
+	fmt.Println(pk.Curve.Params().Gx)
+	fmt.Println(pk.Curve.Params().Gy)
+	post, err := httpClient.Post("http://localhost:8808/publicKeyOnChain", nil, pk)
+	if err != nil {
+		glog.Error(err)
+	}
+	s := string(post)
+	fmt.Println(s)
 }

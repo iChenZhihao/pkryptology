@@ -131,6 +131,7 @@ func (d *DkgOperator) StartDkg() error {
 	if err != nil {
 		glog.Errorf("")
 	}
+	SavePublicKey(*d.dkgResult.VerificationKey)
 	return nil
 }
 
@@ -322,4 +323,8 @@ func (d *DkgOperator) NewSigner(cosigners []uint32) (*ptcpt.Signer, error) {
 		return nil, err
 	}
 	return signer, nil
+}
+
+func (d *DkgOperator) GetPublicKey() *curves.EcPoint {
+	return d.dkgResult.VerificationKey
 }
